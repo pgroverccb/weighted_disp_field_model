@@ -5,5 +5,5 @@
 
 module load gcc/10
 module load python/3
-cd /mnt/home/pgrover/
+cd /mnt/home/pgrover/weighted_disp_field_model/
 python compute_disp_field.py
