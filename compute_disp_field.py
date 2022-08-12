@@ -2,34 +2,29 @@ import json
 import tifffile 
 import numpy as np
 
-f = open("/mnt/home/pgrover/NewLineage.json", "r")
+f = open("/mnt/ceph/users/pgrover/32_40_dataset/Lineages/GT_tracking_F32_to_F40.json", "r")
 text = f.read()
 text = json.loads(text)
-# data_inputs = []
-# data_outputs = []
+text = text['G_based_on_nn']
 
-for index in range(1, 145):
+for index in range(50, 133):
     five_digit_str = str(index)
     while (len(five_digit_str) != 5):
         five_digit_str = '0' + five_digit_str
-    input_pre = tifffile.imread("/mnt/ceph/users/pgrover/210501_gata_nanog_st7/registered_images/image_reg_" + str(five_digit_str) + ".tif")
-    input_pre = input_pre[13 : 141, 36 : 36 + 128, 36 : 36 + 128]
+    input_pre = tifffile.imread("/mnt/ceph/users/pgrover/32_40_dataset/registered_images/image_reg_" + str(five_digit_str) + ".tif")
     input_pre = (input_pre - np.mean(input_pre))/np.std(input_pre)
     input_pre = input_pre - np.min(input_pre)
     input_pre = input_pre/np.max(input_pre)
-    mask_pre = tifffile.imread("/mnt/ceph/users/pgrover/210501_gata_nanog_st7/registered_label_images/label_reg_" + str(five_digit_str) + ".tif")
-    mask_pre = mask_pre[13 : 141, 36 : 36 + 128, 36 : 36 + 128]
+    mask_pre = tifffile.imread("/mnt/ceph/users/pgrover/32_40_dataset/registered_label_images/label_reg_" + str(five_digit_str) + ".tif")
 
     five_digit_str = str(index + 1)
     while (len(five_digit_str) != 5):
         five_digit_str = '0' + five_digit_str
-    input_post = tifffile.imread("/mnt/ceph/users/pgrover/210501_gata_nanog_st7/registered_images/image_reg_" + str(five_digit_str) + ".tif")
-    input_post = input_post[13 : 141, 36 : 36 + 128, 36 : 36 + 128]
+    input_post = tifffile.imread("/mnt/ceph/users/pgrover/32_40_dataset/registered_images/image_reg_" + str(five_digit_str) + ".tif")
     input_post = (input_post - np.mean(input_post))/np.std(input_post)
     input_post = input_post - np.min(input_post)
     input_post = input_post/np.max(input_post)
-    mask_post = tifffile.imread("/mnt/ceph/users/pgrover/210501_gata_nanog_st7/registered_label_images/label_reg_" + str(five_digit_str) + ".tif")
-    mask_post = mask_post[13 : 141, 36 : 36 + 128, 36 : 36 + 128]
+    mask_post = tifffile.imread("/mnt/ceph/users/pgrover/32_40_dataset/registered_label_images/label_reg_" + str(five_digit_str) + ".tif")
 
     print("Index", index, "pre objects : ", np.unique(mask_pre))
     print("post objects : ", np.unique(mask_post))
@@ -43,9 +38,9 @@ for index in range(1, 145):
             mapping_pre[int(text['Edges'][i]['EndNodes'][0][4:7])].append(int(text['Edges'][i]['EndNodes'][1][4:7]))
 
 
-    disp_x_map_pre = np.zeros((128, 128, 128))
-    disp_y_map_pre = np.zeros((128, 128, 128))
-    disp_z_map_pre = np.zeros((128, 128, 128))
+    disp_x_map_pre = np.zeros((160, 392, 240))
+    disp_y_map_pre = np.zeros((160, 392, 240))
+    disp_z_map_pre = np.zeros((160, 392, 240))
 
     dividing_list = []
     constant_list = []
@@ -57,11 +52,11 @@ for index in range(1, 145):
             constant_list.append(i)
 
     for dividing_index in dividing_list:
-        # print("Dividing Index : ", dividing_index)
+        print("Dividing Index : ", dividing_index)
         all_points = np.argwhere(mask_pre == dividing_index)
         count_parent = len(all_points)
         z_parent_cent, y_parent_cent, x_parent_cent = np.mean(np.argwhere(mask_pre == dividing_index), axis = 0)
-        # print("Parent Centroid : ", round(z_parent_cent, 3), round(y_parent_cent, 3), round(x_parent_cent, 3))
+        print("Parent Centroid : ", round(z_parent_cent, 3), round(y_parent_cent, 3), round(x_parent_cent, 3))
 
         first = mapping_pre[dividing_index][0]
         second = mapping_pre[dividing_index][1]
@@ -69,12 +64,12 @@ for index in range(1, 145):
         all_points = np.argwhere(mask_post == first)
         count_daughter_0 = len(all_points)
         z_daughter_0_cent, y_daughter_0_cent, x_daughter_0_cent = np.mean(np.argwhere(mask_post == first), axis = 0)
-        # print("Daughter 0 Centroid : ", round(z_daughter_0_cent, 3), round(y_daughter_0_cent, 3), round(x_daughter_0_cent, 3))
+        print("Daughter 0 Centroid : ", round(z_daughter_0_cent, 3), round(y_daughter_0_cent, 3), round(x_daughter_0_cent, 3))
 
         all_points = np.argwhere(mask_post == second)
         count_daughter_1 = len(all_points)
         z_daughter_1_cent, y_daughter_1_cent, x_daughter_1_cent = np.mean(np.argwhere(mask_post == second), axis = 0)
-        # print("Daughter 1 Centroid : ", round(z_daughter_1_cent, 3), round(y_daughter_1_cent, 3), round(x_daughter_1_cent, 3))
+        print("Daughter 1 Centroid : ", round(z_daughter_1_cent, 3), round(y_daughter_1_cent, 3), round(x_daughter_1_cent, 3))
 
         portion_to_daughter_0 = 0
         portion_to_daughter_1 = 0
@@ -97,11 +92,11 @@ for index in range(1, 145):
         dirs = np.array(dirs)
         plane_thresh = np.mean(dirs)
         x = 0
-        # print("Plane Constant : ", plane_thresh)
+        print("Plane Constant : ", plane_thresh)
         for i in dirs:
             if (i > plane_thresh):
                 x += 1
-        # print("Portion : ", x/len(dirs))
+        print("Portion : ", x/len(dirs))
         
         all_points = np.argwhere(mask_pre == dividing_index)
         
@@ -126,15 +121,15 @@ for index in range(1, 145):
                 disp_x_map_pre[point[0], point[1], point[2]] += x_daughter_1_cent - point[2]
       
     for constant_index in constant_list[:-1]:
-        # print("Constant Index : ", constant_index)
+        print("Constant Index : ", constant_index)
         
         all_points = np.argwhere(mask_pre == constant_index)
         z_pre_cent, y_pre_cent, x_pre_cent = np.mean(np.argwhere(mask_pre == constant_index), axis = 0)
-        # print("Pre Movement Centroid : ", round(z_pre_cent, 3), round(y_pre_cent, 3), round(x_pre_cent, 3))
+        print("Pre Movement Centroid : ", round(z_pre_cent, 3), round(y_pre_cent, 3), round(x_pre_cent, 3))
 
         all_post_points = np.argwhere(mask_post == mapping_pre[constant_index])
         z_post_cent, y_post_cent, x_post_cent = np.mean(np.argwhere(mask_post == mapping_pre[constant_index][0]), axis = 0)
-        # print("Post Movement Centroid : ", round(z_post_cent, 3), round(y_post_cent, 3), round(x_post_cent, 3))
+        print("Post Movement Centroid : ", round(z_post_cent, 3), round(y_post_cent, 3), round(x_post_cent, 3))
         
         all_points = np.argwhere(mask_pre == constant_index)
         z_pre_cent, y_pre_cent, x_pre_cent = np.mean(np.argwhere(mask_pre == constant_index), axis = 0)
@@ -145,11 +140,16 @@ for index in range(1, 145):
             disp_y_map_pre[point[0], point[1], point[2]] += y_post_cent - point[1]
             disp_x_map_pre[point[0], point[1], point[2]] += x_post_cent - point[2]
       
-    np.save("/mnt/ceph/users/pgrover/disp_field_dataset/inputs/" + str(index) + ".npy", np.array([input_pre, input_post])
-    np.save("/mnt/ceph/users/pgrover/disp_field_dataset/outputs/" + str(index) + ".npy", np.array([disp_x_map_pre, disp_y_map_pre, disp_z_map_pre, disp_y_map_pre, disp_z_map_pre]))
-
-    # data_inputs.append(np.array([input_pre, input_post]))
-    # data_outputs.append(np.array([disp_x_map_pre, disp_y_map_pre, disp_z_map_pre, disp_y_map_pre, disp_z_map_pre]))
+    sample = {'input' : np.array([im_pre, im_post]), 'output' : np.array([growth_pre, growth_post])}    
+    file = open("/mnt/ceph/users/pgrover/growth_field_dataset/sample_" + str(index) + ".pkl", 'rb')
+    sample = pickle.load(file)
+    growth_output = sample['output']
+        
+    data_inputs = np.array([input_pre, input_post])
+    data_outputs = np.array([growth_output[0], [growth_output[1], disp_x_map_pre, disp_y_map_pre, disp_z_map_pre])
+    sample_full = {'input' : data_inputs, 'output' : data_outputs}
+    file_pointer = open("/mnt/ceph/users/pgrover/disp_field_dataset/sample_" + str(index) + ".pkl", "wb")
+    pickle.dump(sample_full, file_pointer)
 
 
 # data_inputs = np.array(data_inputs)
