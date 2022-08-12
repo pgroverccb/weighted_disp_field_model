@@ -18,23 +18,27 @@ class Dataset(torch.utils.data.Dataset):
 
   def __getitem__(self, index):
         ID = self.list_IDs[index]
-        # print("Loading ID : ", ID)
-        input = np.load("/mnt/ceph/users/pgrover/disp_field_dataset/inputs/" + str(ID + 1) + ".npy")
-        input = np.zeros((2, 128, 128, 128))
-        output = np.load("/mnt/ceph/users/pgrover/disp_field_dataset/outputs/" + str(ID + 1) + ".npy")
-        output = output.reshape((5, 128, 128, 128))
-        # output = output/100.0
+        print("Loading ID : ", ID)
+        file = open("/mnt/ceph/users/pgrover/growth_field_dataset/sample_" + str(ID + 1) + ".pkl", 'rb')
+        sample = pickle.load(file)
+        input = sample['input']
+        output = sample['output']
+        z_offset = 0
+        y_offset = 0
+        x_offset = 0
+        input = input[:, z_offset : z_offset + 128, y_offset : y_offset + 128, x_offset : x_offset + 128]
+        output = output[:, z_offset : z_offset + 128, y_offset : y_offset + 128, x_offset : x_offset + 128]
         return input, output
 
 # Parameters
-params = {'batch_size': 2,
+params = {'batch_size': 1,
           'shuffle': True,
-          'num_workers': 6}
+          'num_workers': 0}
 max_epochs = 10
 
 # Datasets
 partition = {'train' : [], 'validation' : []}
-for i in range(0, 140):
+for i in range(50, 130):
     prob = random.random()
     if (prob > 0.85):
         partition['validation'].append(i)
@@ -63,27 +67,27 @@ for e in range(1, 1000+1):
     for X_train_batch, y_train_batch in training_generator:
         batch_num += 1
         X_train_batch, y_train_batch = X_train_batch.to('cuda', dtype = torch.float), y_train_batch.to('cuda', dtype = torch.float)
-        # optimizer.zero_grad()
+        optimizer.zero_grad()
         y_train_pred = disp_field_model(X_train_batch)
         l2_x = mse_loss(y_train_pred[0, 0, :, :, :], y_train_batch[0, 0, :, :, :])
         l2_y = mse_loss(y_train_pred[0, 1, :, :, :], y_train_batch[0, 1, :, :, :])
         l2_z = mse_loss(y_train_pred[0, 2, :, :, :], y_train_batch[0, 2, :, :, :])
-        # print("L1 x : ", round(l2_x.item(), 3), "| L1 y: ", round(l2_y.item(), 3), "| L1 z: ", round(l2_z.item(), 3))
+        print("L1 x : ", round(l2_x.item(), 3), "| L1 y: ", round(l2_y.item(), 3), "| L1 z: ", round(l2_z.item(), 3))
         train_loss = l2_x + l2_y + l2_z
         train_loss_avg += train_loss.item()
-        # train_loss.backward()
-        # optimizer.step()
+        train_loss.backward()
+        optimizer.step()
 
     for X_val_batch, y_val_batch in validation_generator:
         batch_num += 1
         X_val_batch, y_val_batch = X_val_batch.to('cuda', dtype = torch.float), y_val_batch.to('cuda', dtype = torch.float)
-        # optimizer.zero_grad()
+        optimizer.zero_grad()
         y_val_pred = disp_field_model(X_val_batch)
         l2_x = mse_loss(y_val_pred[0, 0, :, :, :], y_val_batch[0, 0, :, :, :])
         l2_y = mse_loss(y_val_pred[0, 1, :, :, :], y_val_batch[0, 1, :, :, :])
         l2_z = mse_loss(y_val_pred[0, 2, :, :, :], y_val_batch[0, 2, :, :, :])
-        # print("L1 x : ", round(l2_x.item(), 3), "| L1 y: ", round(l2_y.item(), 3), "| L1 z: ", round(l2_z.item(), 3))
+        print("L1 x : ", round(l2_x.item(), 3), "| L1 y: ", round(l2_y.item(), 3), "| L1 z: ", round(l2_z.item(), 3))
         val_loss = l2_x + l2_y + l2_z
         val_loss_avg += val_loss.item()
-        # optimizer.step()
+        optimizer.step()
     print("Epoch : ", e, "Train Loss : ", round(train_loss_avg/len(partition['train']), 3), "Val Loss : ", round(val_loss_avg/len(partition['validation']), 3))
