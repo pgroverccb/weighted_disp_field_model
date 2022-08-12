@@ -23,6 +23,7 @@ class Dataset(torch.utils.data.Dataset):
         sample = pickle.load(file)
         input = sample['input']
         output = sample['output']
+        output = output/20.0
         z_offset = 0
         y_offset = 0
         x_offset = 0
@@ -69,11 +70,22 @@ for e in range(1, 1000+1):
         X_train_batch, y_train_batch = X_train_batch.to('cuda', dtype = torch.float), y_train_batch.to('cuda', dtype = torch.float)
         optimizer.zero_grad()
         y_train_pred = disp_field_model(X_train_batch)
-        l2_x = mse_loss(y_train_pred[0, 0, :, :, :], y_train_batch[0, 0, :, :, :])
-        l2_y = mse_loss(y_train_pred[0, 1, :, :, :], y_train_batch[0, 1, :, :, :])
-        l2_z = mse_loss(y_train_pred[0, 2, :, :, :], y_train_batch[0, 2, :, :, :])
-        print("L1 x : ", round(l2_x.item(), 3), "| L1 y: ", round(l2_y.item(), 3), "| L1 z: ", round(l2_z.item(), 3))
-        train_loss = l2_x + l2_y + l2_z
+        
+        div_binary_mask = (y_train_batch[0, 0, :, :, :].clone() > 0.9)
+        non_binary_mask = (y_train_batch[0, 0, :, :, :].clone() < 0.9)
+
+        l2_x_non = mse_loss(y_train_pred[0, 2, :, :, :] * non_binary_mask, y_train_batch[0, 2, :, :, :] * non_binary_mask)
+        l2_y_non = mse_loss(y_train_pred[0, 3, :, :, :] * non_binary_mask, y_train_batch[0, 3, :, :, :] * non_binary_mask)
+        l2_z_non = mse_loss(y_train_pred[0, 4, :, :, :] * non_binary_mask, y_train_batch[0, 4, :, :, :] * non_binary_mask)
+        
+        l2_x_div = mse_loss(y_train_pred[0, 2, :, :, :] * div_binary_mask, y_train_batch[0, 2, :, :, :] * div_binary_mask)
+        l2_y_div = mse_loss(y_train_pred[0, 3, :, :, :] * div_binary_mask, y_train_batch[0, 3, :, :, :] * div_binary_mask)
+        l2_z_div = mse_loss(y_train_pred[0, 4, :, :, :] * div_binary_mask, y_train_batch[0, 4, :, :, :] * div_binary_mask)
+        
+        print("L2 x div : ", round(l2_x_div.item(), 3), "| L2 y div : ", round(l2_y_div.item(), 3), "| L2 z div : ", round(l2_z_div.item(), 3))
+        print("L2 x non div : ", round(l2_x_non.item(), 3), "| L2 y non div: ", round(l2_y_non.item(), 3), "| L2 z non div : ", round(l2_z_non.item(), 3))
+
+        train_loss = l2_x_div + l2_y_div + l2_z_div + 10 * (l2_x_non + l2_y_non + l2_z_non)
         train_loss_avg += train_loss.item()
         train_loss.backward()
         optimizer.step()
