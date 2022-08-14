@@ -8,6 +8,7 @@ import numpy as np
 import tifffile
 import json
 import random
+import pickle
 
 class Dataset(torch.utils.data.Dataset):
   def __init__(self, list_IDs):
@@ -19,14 +20,14 @@ class Dataset(torch.utils.data.Dataset):
   def __getitem__(self, index):
         ID = self.list_IDs[index]
         print("Loading ID : ", ID)
-        file = open("/mnt/ceph/users/pgrover/growth_field_dataset/sample_" + str(ID + 1) + ".pkl", 'rb')
-        sample = pickle.load(file)
-        input = sample['input']
-        output = sample['output']
-        output = output/20.0
-        z_offset = 0
-        y_offset = 0
-        x_offset = 0
+        # file = open("/content/drive/MyDrive/supporting_files_disp_field_model/disp_field_dataset/sample_" + str(ID) + ".pkl", 'rb')
+        # sample = pickle.load(file)
+        input = sample_full['input']
+        output = sample_full['output']
+        output[2:] = output[2:]/20.0
+        z_offset = 13
+        y_offset = 96
+        x_offset = 64
         input = input[:, z_offset : z_offset + 128, y_offset : y_offset + 128, x_offset : x_offset + 128]
         output = output[:, z_offset : z_offset + 128, y_offset : y_offset + 128, x_offset : x_offset + 128]
         return input, output
@@ -46,6 +47,8 @@ for i in range(50, 130):
     else:
         partition['train'].append(i)
 
+partition['train'] = [125]
+partition['validation'] = [125]
 # Generators
 training_set = Dataset(partition['train'])
 training_generator = torch.utils.data.DataLoader(training_set, **params)
@@ -54,7 +57,7 @@ validation_set = Dataset(partition['validation'])
 validation_generator = torch.utils.data.DataLoader(validation_set, **params)
 
 disp_field_model = UNet3D(in_channel = 2, out_channel = 5, is_isotropic = True)
-disp_field_model = disp_field_model.cuda()
+# disp_field_model = disp_field_model.cuda()
 
 mse_loss = nn.L1Loss()
 optimizer = torch.optim.Adam(disp_field_model.parameters(), lr=0.0001)
@@ -67,7 +70,7 @@ for e in range(1, 1000+1):
 
     for X_train_batch, y_train_batch in training_generator:
         batch_num += 1
-        X_train_batch, y_train_batch = X_train_batch.to('cuda', dtype = torch.float), y_train_batch.to('cuda', dtype = torch.float)
+        X_train_batch, y_train_batch = X_train_batch.to('cpu', dtype = torch.float), y_train_batch.to('cpu', dtype = torch.float)
         optimizer.zero_grad()
         y_train_pred = disp_field_model(X_train_batch)
         
@@ -92,7 +95,7 @@ for e in range(1, 1000+1):
 
     for X_val_batch, y_val_batch in validation_generator:
         batch_num += 1
-        X_val_batch, y_val_batch = X_val_batch.to('cuda', dtype = torch.float), y_val_batch.to('cuda', dtype = torch.float)
+        X_val_batch, y_val_batch = X_val_batch.to('cpu', dtype = torch.float), y_val_batch.to('cpu', dtype = torch.float)
         optimizer.zero_grad()
         y_val_pred = disp_field_model(X_val_batch)
         l2_x = mse_loss(y_val_pred[0, 0, :, :, :], y_val_batch[0, 0, :, :, :])
