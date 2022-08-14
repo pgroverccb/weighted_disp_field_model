@@ -1,30 +1,26 @@
 import json
 import tifffile 
 import numpy as np
+import pickle
 
-f = open("/mnt/ceph/users/pgrover/32_40_dataset/Lineages/GT_tracking_F32_to_F40.json", "r")
-text = f.read()
-text = json.loads(text)
-text = text['G_based_on_nn']
-
-for index in range(50, 133):
+def compute_disp_field(index):
     five_digit_str = str(index)
     while (len(five_digit_str) != 5):
         five_digit_str = '0' + five_digit_str
-    input_pre = tifffile.imread("/mnt/ceph/users/pgrover/32_40_dataset/registered_images/image_reg_" + str(five_digit_str) + ".tif")
+    input_pre = tifffile.imread("/content/drive/MyDrive/image_reg_" + str(five_digit_str) + ".tif")
     input_pre = (input_pre - np.mean(input_pre))/np.std(input_pre)
     input_pre = input_pre - np.min(input_pre)
     input_pre = input_pre/np.max(input_pre)
-    mask_pre = tifffile.imread("/mnt/ceph/users/pgrover/32_40_dataset/registered_label_images/label_reg_" + str(five_digit_str) + ".tif")
+    mask_pre = tifffile.imread("/content/drive/MyDrive/label_reg_" + str(five_digit_str) + ".tif")
 
     five_digit_str = str(index + 1)
     while (len(five_digit_str) != 5):
         five_digit_str = '0' + five_digit_str
-    input_post = tifffile.imread("/mnt/ceph/users/pgrover/32_40_dataset/registered_images/image_reg_" + str(five_digit_str) + ".tif")
+    input_post = tifffile.imread("/content/drive/MyDrive/image_reg_" + str(five_digit_str) + ".tif")
     input_post = (input_post - np.mean(input_post))/np.std(input_post)
     input_post = input_post - np.min(input_post)
     input_post = input_post/np.max(input_post)
-    mask_post = tifffile.imread("/mnt/ceph/users/pgrover/32_40_dataset/registered_label_images/label_reg_" + str(five_digit_str) + ".tif")
+    mask_post = tifffile.imread("/content/drive/MyDrive/label_reg_" + str(five_digit_str) + ".tif")
 
     print("Index", index, "pre objects : ", np.unique(mask_pre))
     print("post objects : ", np.unique(mask_post))
@@ -139,20 +135,5 @@ for index in range(50, 133):
             disp_z_map_pre[point[0], point[1], point[2]] += z_post_cent - point[0]
             disp_y_map_pre[point[0], point[1], point[2]] += y_post_cent - point[1]
             disp_x_map_pre[point[0], point[1], point[2]] += x_post_cent - point[2]
-      
-    sample = {'input' : np.array([im_pre, im_post]), 'output' : np.array([growth_pre, growth_post])}    
-    file = open("/mnt/ceph/users/pgrover/growth_field_dataset/sample_" + str(index) + ".pkl", 'rb')
-    sample = pickle.load(file)
-    growth_output = sample['output']
-        
-    data_inputs = np.array([input_pre, input_post])
-    data_outputs = np.array([growth_output[0], [growth_output[1], disp_x_map_pre, disp_y_map_pre, disp_z_map_pre])
-    sample_full = {'input' : data_inputs, 'output' : data_outputs}
-    file_pointer = open("/mnt/ceph/users/pgrover/disp_field_dataset/sample_" + str(index) + ".pkl", "wb")
-    pickle.dump(sample_full, file_pointer)
 
-
-# data_inputs = np.array(data_inputs)
-# data_outputs = np.array(data_outputs)
-# print("Inputs : ", data_inputs.shape)
-# print("Outputs : ", data_outputs.shape)
+    return input_pre, input_post, disp_x_map_pre, disp_y_map_pre, disp_z_map_pre
