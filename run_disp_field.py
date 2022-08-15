@@ -20,14 +20,14 @@ class Dataset(torch.utils.data.Dataset):
   def __getitem__(self, index):
         ID = self.list_IDs[index]
         print("Loading ID : ", ID)
-        # file = open("/content/drive/MyDrive/supporting_files_disp_field_model/disp_field_dataset/sample_" + str(ID) + ".pkl", 'rb')
-        # sample = pickle.load(file)
+        file = open("/mnt/ceph/users/pgrover/disp_field_dataset/sample_" + str(ID) + ".pkl", 'rb')
+        sample_full = pickle.load(file)
         input = sample_full['input']
         output = sample_full['output']
         output[2:] = output[2:]/20.0
-        z_offset = 13
-        y_offset = 96
-        x_offset = 64
+        z_offset = random.randint(5, 20)
+        y_offset = random.randint(80, 120)
+        x_offset = random.randint(45, 85)
         input = input[:, z_offset : z_offset + 128, y_offset : y_offset + 128, x_offset : x_offset + 128]
         output = output[:, z_offset : z_offset + 128, y_offset : y_offset + 128, x_offset : x_offset + 128]
         return input, output
@@ -47,8 +47,6 @@ for i in range(50, 130):
     else:
         partition['train'].append(i)
 
-partition['train'] = [125]
-partition['validation'] = [125]
 # Generators
 training_set = Dataset(partition['train'])
 training_generator = torch.utils.data.DataLoader(training_set, **params)
@@ -57,7 +55,7 @@ validation_set = Dataset(partition['validation'])
 validation_generator = torch.utils.data.DataLoader(validation_set, **params)
 
 disp_field_model = UNet3D(in_channel = 2, out_channel = 5, is_isotropic = True)
-# disp_field_model = disp_field_model.cuda()
+disp_field_model = disp_field_model.cuda()
 
 mse_loss = nn.L1Loss()
 optimizer = torch.optim.Adam(disp_field_model.parameters(), lr=0.0001)
@@ -70,7 +68,7 @@ for e in range(1, 1000+1):
 
     for X_train_batch, y_train_batch in training_generator:
         batch_num += 1
-        X_train_batch, y_train_batch = X_train_batch.to('cpu', dtype = torch.float), y_train_batch.to('cpu', dtype = torch.float)
+        X_train_batch, y_train_batch = X_train_batch.to('cuda', dtype = torch.float), y_train_batch.to('cuda', dtype = torch.float)
         optimizer.zero_grad()
         y_train_pred = disp_field_model(X_train_batch)
         
@@ -95,14 +93,25 @@ for e in range(1, 1000+1):
 
     for X_val_batch, y_val_batch in validation_generator:
         batch_num += 1
-        X_val_batch, y_val_batch = X_val_batch.to('cpu', dtype = torch.float), y_val_batch.to('cpu', dtype = torch.float)
+        X_val_batch, y_val_batch = X_val_batch.to('cuda', dtype = torch.float), y_val_batch.to('cuda', dtype = torch.float)
         optimizer.zero_grad()
         y_val_pred = disp_field_model(X_val_batch)
-        l2_x = mse_loss(y_val_pred[0, 0, :, :, :], y_val_batch[0, 0, :, :, :])
-        l2_y = mse_loss(y_val_pred[0, 1, :, :, :], y_val_batch[0, 1, :, :, :])
-        l2_z = mse_loss(y_val_pred[0, 2, :, :, :], y_val_batch[0, 2, :, :, :])
-        print("L1 x : ", round(l2_x.item(), 3), "| L1 y: ", round(l2_y.item(), 3), "| L1 z: ", round(l2_z.item(), 3))
-        val_loss = l2_x + l2_y + l2_z
+        
+        div_binary_mask = (y_val_batch[0, 0, :, :, :].clone() > 0.9)
+        non_binary_mask = (y_val_batch[0, 0, :, :, :].clone() < 0.9)
+        
+        l2_x_non = mse_loss(y_val_pred[0, 2, :, :, :] * non_binary_mask, y_val_batch[0, 2, :, :, :] * non_binary_mask)
+        l2_y_non = mse_loss(y_val_pred[0, 3, :, :, :] * non_binary_mask, y_val_batch[0, 3, :, :, :] * non_binary_mask)
+        l2_z_non = mse_loss(y_val_pred[0, 4, :, :, :] * non_binary_mask, y_val_batch[0, 4, :, :, :] * non_binary_mask)
+        
+        l2_x_div = mse_loss(y_val_pred[0, 2, :, :, :] * div_binary_mask, y_val_batch[0, 2, :, :, :] * div_binary_mask)
+        l2_y_div = mse_loss(y_val_pred[0, 3, :, :, :] * div_binary_mask, y_val_batch[0, 3, :, :, :] * div_binary_mask)
+        l2_z_div = mse_loss(y_val_pred[0, 4, :, :, :] * div_binary_mask, y_val_batch[0, 4, :, :, :] * div_binary_mask)
+        
+        print("L2 x div : ", round(l2_x_div.item(), 3), "| L2 y div : ", round(l2_y_div.item(), 3), "| L2 z div : ", round(l2_z_div.item(), 3))
+        print("L2 x non div : ", round(l2_x_non.item(), 3), "| L2 y non div: ", round(l2_y_non.item(), 3), "| L2 z non div : ", round(l2_z_non.item(), 3))
+
+        val_loss = l2_x_div + l2_y_div + l2_z_div + 10 * (l2_x_non + l2_y_non + l2_z_non)
         val_loss_avg += val_loss.item()
         optimizer.step()
     print("Epoch : ", e, "Train Loss : ", round(train_loss_avg/len(partition['train']), 3), "Val Loss : ", round(val_loss_avg/len(partition['validation']), 3))
