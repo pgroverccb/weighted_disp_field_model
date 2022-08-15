@@ -3,24 +3,29 @@ import tifffile
 import numpy as np
 import pickle
 
+f = open("/mnt/ceph/users/pgrover/32_40_dataset/Lineages/GT_tracking_F32_to_F40.json", "r")
+text = f.read()
+text = json.loads(text)
+text = text['G_based_on_nn']
+
 def compute_disp_field(index):
     five_digit_str = str(index)
     while (len(five_digit_str) != 5):
         five_digit_str = '0' + five_digit_str
-    input_pre = tifffile.imread("/content/drive/MyDrive/image_reg_" + str(five_digit_str) + ".tif")
+    input_pre = tifffile.imread(/mnt/ceph/users/pgrover/32_40_dataset/registered_images/image_reg_" + str(five_digit_str) + ".tif")
     input_pre = (input_pre - np.mean(input_pre))/np.std(input_pre)
     input_pre = input_pre - np.min(input_pre)
     input_pre = input_pre/np.max(input_pre)
-    mask_pre = tifffile.imread("/content/drive/MyDrive/label_reg_" + str(five_digit_str) + ".tif")
+    mask_pre = tifffile.imread("/mnt/ceph/users/pgrover/32_40_dataset/registered_label_images/label_reg_" + str(five_digit_str) + ".tif")
 
     five_digit_str = str(index + 1)
     while (len(five_digit_str) != 5):
         five_digit_str = '0' + five_digit_str
-    input_post = tifffile.imread("/content/drive/MyDrive/image_reg_" + str(five_digit_str) + ".tif")
+    input_post = tifffile.imread("/mnt/ceph/users/pgrover/32_40_dataset/registered_images/image_reg_" + str(five_digit_str) + ".tif")
     input_post = (input_post - np.mean(input_post))/np.std(input_post)
     input_post = input_post - np.min(input_post)
     input_post = input_post/np.max(input_post)
-    mask_post = tifffile.imread("/content/drive/MyDrive/label_reg_" + str(five_digit_str) + ".tif")
+    mask_post = tifffile.imread("/mnt/ceph/users/pgrover/32_40_dataset/registered_label_images/label_reg_" + str(five_digit_str) + ".tif")
 
     print("Index", index, "pre objects : ", np.unique(mask_pre))
     print("post objects : ", np.unique(mask_post))
