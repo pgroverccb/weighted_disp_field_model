@@ -10,6 +10,19 @@ import json
 import random
 import pickle
 
+f = open("/mnt/ceph/users/pgrover/32_40_dataset/Lineages/GT_tracking_F32_to_F40.json", "r")
+text = f.read()
+text = json.loads(text)
+text = text['G_based_on_nn']
+
+mapping_pre = {}
+    for i in range(len(text['Edges'])):
+        if (text['Edges'][i]['EndNodes'][0][:3] == str(index)):
+            if (int(text['Edges'][i]['EndNodes'][0][4:7]) not in mapping_pre.keys()):
+                mapping_pre[int(text['Edges'][i]['EndNodes'][0][4:7])] = []
+            # print(text['Edges'][i]['EndNodes'][0], text['Edges'][i]['EndNodes'][1])
+            mapping_pre[int(text['Edges'][i]['EndNodes'][0][4:7])].append(int(text['Edges'][i]['EndNodes'][1][4:7]))
+            
 testing_partition = []
 for i in range(130, 133):
     testing_partition.append(i)
