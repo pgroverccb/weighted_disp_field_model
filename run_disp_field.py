@@ -9,6 +9,14 @@ import tifffile
 import json
 import random
 import pickle
+import sys
+import builtins
+import os
+
+sys.stdout = open("/mnt/home/pgrover/weighted_disp_field_model/logs/continous_logging_disp_field.txt", "w", buffering=1)
+def print(text):
+    builtins.print(text)
+    os.fsync(sys.stdout)
 
 class Dataset(torch.utils.data.Dataset):
   def __init__(self, list_IDs):
@@ -19,7 +27,7 @@ class Dataset(torch.utils.data.Dataset):
 
   def __getitem__(self, index):
         ID = self.list_IDs[index]
-        print("Loading ID : ", ID)
+        # print("Loading ID : ", ID)
         file = open("/mnt/ceph/users/pgrover/disp_field_dataset/sample_" + str(ID) + ".pkl", 'rb')
         sample_full = pickle.load(file)
         input = sample_full['input']
@@ -33,7 +41,7 @@ class Dataset(torch.utils.data.Dataset):
         return input, output
 
 # Parameters
-params = {'batch_size': 1,
+params = {'batch_size': 6,
           'shuffle': True,
           'num_workers': 0}
 max_epochs = 10
@@ -56,9 +64,10 @@ validation_generator = torch.utils.data.DataLoader(validation_set, **params)
 
 disp_field_model = UNet3D(in_channel = 2, out_channel = 5, is_isotropic = False)
 disp_field_model = disp_field_model.cuda()
+disp_field_model.load_state_dict(torch.load("utils/disp_field_saved_model.pth"))
 sig = torch.nn.Sigmoid()
 
-mse_loss = nn.L1Loss()
+mse_loss = nn.MSELoss()
 optimizer = torch.optim.Adam(disp_field_model.parameters(), lr=0.0001)
 print("Begin training.")
 for e in range(1, 1000+1):
@@ -76,18 +85,22 @@ for e in range(1, 1000+1):
         div_binary_mask = (sig(y_train_pred[0, 0, :, :, :]).clone() > 0.9)
         non_binary_mask = (sig(y_train_pred[0, 0, :, :, :]).clone() < 0.9)
 
+        l2_growth_pre = mse_loss(sig(y_train_pred[0, 0, :, :, :]), y_train_batch[0, 0, :, :, :]) * 100
+        l2_growth_post = mse_loss(sig(y_train_pred[0, 1, :, :, :]), y_train_batch[0, 1, :, :, :]) * 100
+
         l2_x_non = mse_loss(sig(y_train_pred[0, 2, :, :, :]) * non_binary_mask, y_train_batch[0, 2, :, :, :] * non_binary_mask) * 100
         l2_y_non = mse_loss(sig(y_train_pred[0, 3, :, :, :]) * non_binary_mask, y_train_batch[0, 3, :, :, :] * non_binary_mask) * 100
         l2_z_non = mse_loss(sig(y_train_pred[0, 4, :, :, :]) * non_binary_mask, y_train_batch[0, 4, :, :, :] * non_binary_mask) * 100
         
-        l2_x_div = mse_loss(sig(y_train_pred[0, 2, :, :, :]) * div_binary_mask, y_train_batch[0, 2, :, :, :] * div_binary_mask) * 100
-        l2_y_div = mse_loss(sig(y_train_pred[0, 3, :, :, :]) * div_binary_mask, y_train_batch[0, 3, :, :, :] * div_binary_mask) * 100
-        l2_z_div = mse_loss(sig(y_train_pred[0, 4, :, :, :]) * div_binary_mask, y_train_batch[0, 4, :, :, :] * div_binary_mask) * 100
+        l2_x_div = mse_loss(sig(y_train_pred[0, 2, :, :, :]) * div_binary_mask, y_train_batch[0, 2, :, :, :] * div_binary_mask) * 10000
+        l2_y_div = mse_loss(sig(y_train_pred[0, 3, :, :, :]) * div_binary_mask, y_train_batch[0, 3, :, :, :] * div_binary_mask) * 10000
+        l2_z_div = mse_loss(sig(y_train_pred[0, 4, :, :, :]) * div_binary_mask, y_train_batch[0, 4, :, :, :] * div_binary_mask) * 10000
         
-        print("L2 x div : ", round(l2_x_div.item(), 3), "| L2 y div : ", round(l2_y_div.item(), 3), "| L2 z div : ", round(l2_z_div.item(), 3))
-        print("L2 x non div : ", round(l2_x_non.item(), 3), "| L2 y non div: ", round(l2_y_non.item(), 3), "| L2 z non div : ", round(l2_z_non.item(), 3))
+        print("T - L2 growth pre : " + str(round(l2_growth_pre.item(), 3)) + "| L2 growth post : " + str(round(l2_growth_post.item(), 3)))
+        print("T - L2 x div : " + str(round(l2_x_div.item(), 3)) + "| L2 y div : " + str(round(l2_y_div.item(), 3)) + "| L2 z div : " + str(round(l2_z_div.item(), 3)))
+        print("T - L2 x non div : " + str(round(l2_x_non.item(), 3)) + "| L2 y non div: " + str(round(l2_y_non.item(), 3)) + "| L2 z non div : " + str(round(l2_z_non.item(), 3)))
 
-        train_loss = l2_x_div + l2_y_div + l2_z_div + 10 * (l2_x_non + l2_y_non + l2_z_non)
+        train_loss = l2_growth_pre + l2_growth_post +  (l2_x_div + l2_y_div + l2_z_div) * 1 + 1 * (l2_x_non + l2_y_non + l2_z_non)
         train_loss_avg += train_loss.item()
         train_loss.backward()
         optimizer.step()
@@ -101,18 +114,23 @@ for e in range(1, 1000+1):
         div_binary_mask = (sig(y_val_pred[0, 0, :, :, :]).clone() > 0.9)
         non_binary_mask = (sig(y_val_pred[0, 0, :, :, :]).clone() < 0.9)
         
+        l2_growth_pre = mse_loss(sig(y_val_pred[0, 0, :, :, :]), y_val_batch[0, 0, :, :, :]) * 100
+        l2_growth_post = mse_loss(sig(y_val_pred[0, 1, :, :, :]), y_val_batch[0, 1, :, :, :]) * 100
+
         l2_x_non = mse_loss(sig(y_val_pred[0, 2, :, :, :]) * non_binary_mask, y_val_batch[0, 2, :, :, :] * non_binary_mask) * 100
         l2_y_non = mse_loss(sig(y_val_pred[0, 3, :, :, :]) * non_binary_mask, y_val_batch[0, 3, :, :, :] * non_binary_mask) * 100
         l2_z_non = mse_loss(sig(y_val_pred[0, 4, :, :, :]) * non_binary_mask, y_val_batch[0, 4, :, :, :] * non_binary_mask) * 100
         
-        l2_x_div = mse_loss(sig(y_val_pred[0, 2, :, :, :]) * div_binary_mask, y_val_batch[0, 2, :, :, :] * div_binary_mask) * 100
-        l2_y_div = mse_loss(sig(y_val_pred[0, 3, :, :, :]) * div_binary_mask, y_val_batch[0, 3, :, :, :] * div_binary_mask) * 100
-        l2_z_div = mse_loss(sig(y_val_pred[0, 4, :, :, :]) * div_binary_mask, y_val_batch[0, 4, :, :, :] * div_binary_mask) * 100
+        l2_x_div = mse_loss(sig(y_val_pred[0, 2, :, :, :]) * div_binary_mask, y_val_batch[0, 2, :, :, :] * div_binary_mask) * 10000
+        l2_y_div = mse_loss(sig(y_val_pred[0, 3, :, :, :]) * div_binary_mask, y_val_batch[0, 3, :, :, :] * div_binary_mask) * 10000
+        l2_z_div = mse_loss(sig(y_val_pred[0, 4, :, :, :]) * div_binary_mask, y_val_batch[0, 4, :, :, :] * div_binary_mask) * 10000
         
-        print("L2 x div : ", round(l2_x_div.item(), 3), "| L2 y div : ", round(l2_y_div.item(), 3), "| L2 z div : ", round(l2_z_div.item(), 3))
-        print("L2 x non div : ", round(l2_x_non.item(), 3), "| L2 y non div: ", round(l2_y_non.item(), 3), "| L2 z non div : ", round(l2_z_non.item(), 3))
+        print("V - L2 growth pre : " + str(round(l2_growth_pre.item(), 3)) + "| L2 growth post : " + str(round(l2_growth_post.item(), 3)))
+        print("V - L2 x div : " + str(round(l2_x_div.item(), 3)) + "| L2 y div : " + str(round(l2_y_div.item(), 3)) + "| L2 z div : " + str(round(l2_z_div.item(), 3)))
+        print("V - L2 x non div : " + str(round(l2_x_non.item(), 3)) + "| L2 y non div: " + str(round(l2_y_non.item(), 3)) + "| L2 z non div : " + str(round(l2_z_non.item(), 3)))
 
-        val_loss = l2_x_div + l2_y_div + l2_z_div + 10 * (l2_x_non + l2_y_non + l2_z_non)
+        val_loss = l2_growth_pre + l2_growth_post + l2_x_div + l2_y_div + l2_z_div + 1 * (l2_x_non + l2_y_non + l2_z_non)
         val_loss_avg += val_loss.item()
         optimizer.step()
-    print("Epoch : ", e, "Train Loss : ", round(train_loss_avg/len(partition['train']), 3), "Val Loss : ", round(val_loss_avg/len(partition['validation']), 3))
+    print("Epoch : " + str(e) + "Train Loss : " + str(round(train_loss_avg/len(partition['train']), 3)) + "Val Loss : " + str(round(val_loss_avg/len(partition['validation']), 3)))
+    torch.save(disp_field_model.state_dict(), "utils/disp_field_saved_model.pth")
