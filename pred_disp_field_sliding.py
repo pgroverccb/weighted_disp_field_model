@@ -17,16 +17,16 @@ for i in range(130, 133):
 
 disp_field_model = UNet3D(in_channel = 2, out_channel = 5, is_isotropic = True)
 disp_field_model = disp_field_model.cuda()
-disp_field_model.load_state_dict(torch.load("/mnt/home/pgrover/weighted_disp_field_model/utils/saved_model.pth"))
+disp_field_model.load_state_dict(torch.load("/mnt/home/pgrover/weighted_disp_field_model/utils/disp_field_saved_model.pth"))
  
 print("Begin Testing.")
 for ID in testing_partition:
     file = open("/mnt/ceph/users/pgrover/growth_field_dataset/sample_" + str(ID) + ".pkl", 'rb')
     sample_full = pickle.load(file)
-    input = sample_full['input']
-    output = sample_full['output']
-    input = input[:, 13 : 13 + 128, 64 : 64 + 128, 96 : 96 + 128]
-    output = input[:, 13 : 13 + 128, 64 : 64 + 128, 96 : 96 + 128]
+    input = torch.Tensor(sample_full['input'].reshape((1, sample_full['input'].shape[0], sample_full['input'].shape[1], sample_full['input'].shape[2], sample_full['input'].shape[3])))
+    output = torch.Tensor(sample_full['output'].reshape((1, sample_full['output'].shape[0], sample_full['output'].shape[1], sample_full['output'].shape[2], sample_full['output'].shape[3])))
+    input = input[:, :, 80 : 80 + 16, 64 : 64 + 128, 96 : 96 + 128]
+    output = input[:, :, 80 : 80 + 16, 64 : 64 + 128, 96 : 96 + 128]
     input, output = input.to('cuda', dtype = torch.float), output.to('cuda', dtype = torch.float)
     output_pred = disp_field_model(input)
     np.save("/mnt/home/pgrover/weighted_disp_field_model/utils/testing_pred_" + str(ID) + ".npy", output_pred.detach().cpu().numpy())
